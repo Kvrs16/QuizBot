@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Platform - Take Quiz</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="take-quiz-container">
+        <div class="quiz-content" id="quizContent">
+            <!-- Content will be loaded dynamically -->
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let currentQuiz = null;
+        let currentQuestion = 0;
+        let answers = [];
+        let startTime = null;
+        let participantName = '';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const quizId = urlParams.get('quiz');
+            
+            if (!quizId) {
+                showError('Quiz not found. Please check the link and try again.');
+                return;
+            }
+            
+            loadQuiz(quizId);
+        });
+
+        function loadQuiz(quizId) {
+            currentQuiz = getQuiz(quizId);
+            
+            if (!currentQuiz) {
+                showError('Quiz not found. The quiz may have been deleted or the link is incorrect.');
+                return;
+            }
+            
+            showQuizIntro();
+        }
+
+        function showQuizIntro() {
+            const quizContent = document.getElementById('quizContent');
+            quizContent.innerHTML = `
+                <div class="quiz-intro">
+                    <div class="quiz-intro-header">
+                        <h1>${escapeHtml(currentQuiz.title)}</h1>
+                        <p class="quiz-description">${escapeHtml(currentQuiz.description)}</p>
+                    </div>
+                    
+                    <div class="quiz-info">
+                        <div class="info-item">
+                            <span class="info-icon">📝</span>
+                            <span class="info-text">${currentQuiz.questions.length} Questions</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-icon">⏱️</span>
+                            <span class="info-text">No time limit</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-icon">📊</span>
+                            <span class="info-text">Multiple choice</span>
+                        </div>
+                    </div>
+                    
+                    <div class="participant-form">
+                        <div class="form-group">
+                            <label for="participantName">Your Name</label>
+                            <input type="text" id="participantName" name="participantName" 
+                                   required placeholder="Enter your name to start">
+                        </div>
+                        <button class="btn btn-primary btn-large" id="startQuizBtn">
+                            Start Quiz
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('startQuizBtn').addEventListener('click', startQuiz);
+        }
+
+        function startQuiz() {
+            participantName = document.getElementById('participantName').value.trim();
+            
+            if (!participantName) {
+                showToast('Please enter your name before starting the quiz', 'error');
+                return;
+            }
+            
+            startTime = new Date();
+            answers = new Array(currentQuiz.questions.length);
+            showQuestion();
+        }
+
+        function showQuestion() {
+            const question = currentQuiz.questions[currentQuestion];
+            const progress = ((currentQuestion + 1) / currentQuiz.questions.length) * 100;
+            
+            const quizContent = document.getElementById('quizContent');
+            quizContent.innerHTML = `
+                <div class="quiz-taking">
+                    <div class="quiz-header">
+                        <div class="quiz-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${progress}%"></div>
+                            </div>
+                            <span class="progress-text">Question ${currentQuestion + 1} of ${currentQuiz.questions.length}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="question-container">
+                        <h2 class="question-text">${escapeHtml(question.question)}</h2>
+                        
+                        <div class="options-container">
+                            ${question.options.map((option, index) => `
+                                <div class="option-item ${answers[currentQuestion] === index ? 'selected' : ''}" 
+                                     onclick="selectAnswer(${index})">
+                                    <input type="radio" id="option${index}" name="answer" value="${index}" 
+                                           ${answers[currentQuestion] === index ? 'checked' : ''}>
+                                    <label for="option${index}">${escapeHtml(option)}</label>
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div class="question-actions">
+                            <button class="btn btn-outline" id="prevBtn" 
+                                    ${currentQuestion === 0 ? 'disabled' : ''} onclick="previousQuestion()">
+                                ← Previous
+                            </button>
+                            
+                            <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">
+                                ${currentQuestion === currentQuiz.questions.length - 1 ? 'Finish Quiz' : 'Next →'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function selectAnswer(answerIndex) {
+            answers[currentQuestion] = answerIndex;
+            
+            // Update UI
+            const options = document.querySelectorAll('.option-item');
+            options.forEach((option, index) => {
+                option.classList.toggle('selected', index === answerIndex);
+                const radio = option.querySelector('input[type="radio"]');
+                radio.checked = index === answerIndex;
+            });
+        }
+
+        function previousQuestion() {
+            if (currentQuestion > 0) {
+                currentQuestion--;
+                showQuestion();
+            }
+        }
+
+        function nextQuestion() {
+            if (currentQuestion < currentQuiz.questions.length - 1) {
+                currentQuestion++;
+                showQuestion();
+            } else {
+                finishQuiz();
+            }
+        }
+
+        function finishQuiz() {
+            // Calculate score
+            let correctAnswers = 0;
+            answers.forEach((answer, index) => {
+                if (answer === currentQuiz.questions[index].correctAnswer) {
+                    correctAnswers++;
+                }
+            });
+            
+            const score = Math.round((correctAnswers / currentQuiz.questions.length) * 100);
+            
+            // Save result
+            const result = {
+                id: generateId(),
+                quizId: currentQuiz.id,
+                participantName: participantName,
+                score: score,
+                correctAnswers: correctAnswers,
+                totalQuestions: currentQuiz.questions.length,
+                answers: answers,
+                completedAt: new Date().toISOString()
+            };
+            
+            saveQuizResult(result);
+            showResults(result);
+        }
+
+        function showResults(result) {
+            const quizContent = document.getElementById('quizContent');
+            const scoreClass = result.score >= 80 ? 'excellent' : result.score >= 60 ? 'good' : 'needs-improvement';
+            
+            quizContent.innerHTML = `
+                <div class="quiz-results">
+                    <div class="results-header">
+                        <div class="results-icon ${scoreClass}">
+                            ${result.score >= 80 ? '🎉' : result.score >= 60 ? '👍' : '📚'}
+                        </div>
+                        <h1>Quiz Completed!</h1>
+                        <p>Great job, ${escapeHtml(participantName)}!</p>
+                    </div>
+                    
+                    <div class="score-display">
+                        <div class="score-circle ${scoreClass}">
+                            <span class="score-percentage">${result.score}%</span>
+                        </div>
+                        <div class="score-details">
+                            <p>You got <strong>${result.correctAnswers} out of ${result.totalQuestions}</strong> questions correct</p>
+                        </div>
+                    </div>
+                    
+                    <div class="results-breakdown">
+                        <h3>Question Review</h3>
+                        <div class="questions-review">
+                            ${currentQuiz.questions.map((question, index) => {
+                                const userAnswer = result.answers[index];
+                                const correctAnswer = question.correctAnswer;
+                                const isCorrect = userAnswer === correctAnswer;
+                                
+                                return `
+                                    <div class="review-item ${isCorrect ? 'correct' : 'incorrect'}">
+                                        <div class="review-header">
+                                            <span class="review-icon">${isCorrect ? '✅' : '❌'}</span>
+                                            <span class="question-number">Question ${index + 1}</span>
+                                        </div>
+                                        <p class="review-question">${escapeHtml(question.question)}</p>
+                                        <div class="review-answers">
+                                            <p class="your-answer">
+                                                <strong>Your answer:</strong> ${escapeHtml(question.options[userAnswer] || 'Not answered')}
+                                            </p>
+                                            ${!isCorrect ? `
+                                                <p class="correct-answer">
+                                                    <strong>Correct answer:</strong> ${escapeHtml(question.options[correctAnswer])}
+                                                </p>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="results-actions">
+                        <button class="btn btn-outline" onclick="window.location.href='index.html'">
+                            Back to Home
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showError(message) {
+            const quizContent = document.getElementById('quizContent');
+            quizContent.innerHTML = `
+                <div class="error-state">
+                    <div class="error-icon">❌</div>
+                    <h1>Oops!</h1>
+                    <p>${escapeHtml(message)}</p>
+                    <button class="btn btn-primary" onclick="window.location.href='index.html'">
+                        Back to Home
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

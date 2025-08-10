@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Platform - Create Quiz</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="create-quiz-container">
+        <header class="create-quiz-header">
+            <div class="header-content">
+                <button class="btn btn-outline" onclick="window.location.href='dashboard.html'">
+                    ← Back to Dashboard
+                </button>
+                <h1>Create New Quiz</h1>
+                <div></div>
+            </div>
+        </header>
+
+        <main class="create-quiz-main">
+            <div class="quiz-form-container">
+                <form id="quizForm" class="quiz-form">
+                    <div class="quiz-info-section">
+                        <h2>Quiz Information</h2>
+                        
+                        <div class="form-group">
+                            <label for="quizTitle">Quiz Title</label>
+                            <input type="text" id="quizTitle" name="quizTitle" required 
+                                   placeholder="Enter your quiz title">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="quizDescription">Quiz Description</label>
+                            <textarea id="quizDescription" name="quizDescription" required 
+                                      placeholder="Describe your quiz" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="questions-section">
+                        <div class="questions-header">
+                            <h2>Questions</h2>
+                            <button type="button" class="btn btn-success" id="addQuestionBtn">
+                                ➕ Add Question
+                            </button>
+                        </div>
+                        
+                        <div id="questionsContainer">
+                            <!-- Questions will be added here dynamically -->
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline" onclick="window.location.href='dashboard.html'">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="createQuizBtn">
+                            <span class="btn-text">Create Quiz</span>
+                            <div class="btn-loader"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let questionCount = 0;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check authentication
+            const currentUser = checkAuth();
+            if (!currentUser) return;
+
+            // Add first question
+            addQuestion();
+
+            // Event listeners
+            document.getElementById('addQuestionBtn').addEventListener('click', addQuestion);
+            document.getElementById('quizForm').addEventListener('submit', handleQuizSubmit);
+        });
+
+        function addQuestion() {
+            questionCount++;
+            const questionsContainer = document.getElementById('questionsContainer');
+            
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'question-item';
+            questionDiv.setAttribute('data-question-id', questionCount);
+            
+            questionDiv.innerHTML = `
+                <div class="question-header">
+                    <h3>Question ${questionCount}</h3>
+                    ${questionCount > 1 ? `
+                        <button type="button" class="btn-icon delete-question" onclick="removeQuestion(${questionCount})">
+                            🗑️
+                        </button>
+                    ` : ''}
+                </div>
+                
+                <div class="form-group">
+                    <label for="question${questionCount}">Question Text</label>
+                    <input type="text" id="question${questionCount}" name="question${questionCount}" 
+                           required placeholder="Enter your question">
+                </div>
+                
+                <div class="options-section">
+                    <label class="options-label">Answer Options (Select the correct one)</label>
+                    <div class="options-container">
+                        ${[0, 1, 2, 3].map(i => `
+                            <div class="option-item">
+                                <input type="radio" id="correct${questionCount}_${i}" 
+                                       name="correct${questionCount}" value="${i}" ${i === 0 ? 'checked' : ''}>
+                                <label for="correct${questionCount}_${i}" class="radio-label">
+                                    <span class="radio-custom"></span>
+                                    Correct Answer
+                                </label>
+                                <input type="text" id="option${questionCount}_${i}" 
+                                       name="option${questionCount}_${i}" required 
+                                       placeholder="Option ${i + 1}">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            questionsContainer.appendChild(questionDiv);
+            
+            // Scroll to the new question
+            questionDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function removeQuestion(questionId) {
+            const questionElement = document.querySelector(`[data-question-id="${questionId}"]`);
+            if (questionElement) {
+                questionElement.remove();
+                updateQuestionNumbers();
+            }
+        }
+
+        function updateQuestionNumbers() {
+            const questions = document.querySelectorAll('.question-item');
+            questions.forEach((question, index) => {
+                const newNumber = index + 1;
+                question.setAttribute('data-question-id', newNumber);
+                question.querySelector('h3').textContent = `Question ${newNumber}`;
+            });
+            questionCount = questions.length;
+        }
+
+        function handleQuizSubmit(e) {
+            e.preventDefault();
+            
+            const createBtn = document.getElementById('createQuizBtn');
+            showButtonLoading(createBtn);
+
+            setTimeout(() => {
+                try {
+                    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+                    const quizData = collectQuizData();
+                    
+                    // Validate quiz data
+                    validateQuizData(quizData);
+                    
+                    // Create quiz
+                    const quizId = createQuiz(quizData, currentUser.id);
+                    
+                    // Show success and redirect
+                    showToast('Quiz created successfully!', 'success');
+                    setTimeout(() => {
+                        window.location.href = `view-results.html?quiz=${quizId}`;
+                    }, 1000);
+                    
+                } catch (error) {
+                    hideButtonLoading(createBtn);
+                    showToast(error.message, 'error');
+                }
+            }, 1000);
+        }
+
+        function collectQuizData() {
+            const title = document.getElementById('quizTitle').value.trim();
+            const description = document.getElementById('quizDescription').value.trim();
+            
+            const questions = [];
+            const questionElements = document.querySelectorAll('.question-item');
+            
+            questionElements.forEach((questionElement, index) => {
+                const questionNumber = index + 1;
+                const questionText = document.getElementById(`question${questionElement.getAttribute('data-question-id')}`).value.trim();
+                
+                const options = [];
+                let correctAnswer = 0;
+                
+                for (let i = 0; i < 4; i++) {
+                    const optionText = document.getElementById(`option${questionElement.getAttribute('data-question-id')}_${i}`).value.trim();
+                    options.push(optionText);
+                    
+                    const radioButton = document.getElementById(`correct${questionElement.getAttribute('data-question-id')}_${i}`);
+                    if (radioButton.checked) {
+                        correctAnswer = i;
+                    }
+                }
+                
+                questions.push({
+                    id: generateId(),
+                    question: questionText,
+                    options: options,
+                    correctAnswer: correctAnswer
+                });
+            });
+            
+            return {
+                title: title,
+                description: description,
+                questions: questions
+            };
+        }
+
+        function validateQuizData(quizData) {
+            if (!quizData.title) {
+                throw new Error('Please enter a quiz title');
+            }
+            
+            if (!quizData.description) {
+                throw new Error('Please enter a quiz description');
+            }
+            
+            if (quizData.questions.length === 0) {
+                throw new Error('Please add at least one question');
+            }
+            
+            quizData.questions.forEach((question, index) => {
+                if (!question.question) {
+                    throw new Error(`Please enter text for question ${index + 1}`);
+                }
+                
+                const validOptions = question.options.filter(option => option);
+                if (validOptions.length < 2) {
+                    throw new Error(`Question ${index + 1} needs at least 2 answer options`);
+                }
+                
+                if (!question.options[question.correctAnswer]) {
+                    throw new Error(`Question ${index + 1} has an invalid correct answer selected`);
+                }
+            });
+        }
+    </script>
+</body>
+</html>

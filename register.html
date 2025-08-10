@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Platform - Register</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo">
+                    <div class="logo-icon">Q</div>
+                    <h1>Join Quiz Platform</h1>
+                </div>
+                <p class="subtitle">Create your account to start building quizzes</p>
+            </div>
+
+            <form id="registerForm" class="auth-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required>
+                    <span class="input-icon">👤</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required>
+                    <span class="input-icon">📧</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                    <span class="input-icon">🔒</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" required>
+                    <span class="input-icon">🔒</span>
+                </div>
+
+                <div class="error-message" id="errorMessage"></div>
+
+                <button type="submit" class="btn btn-success" id="registerBtn">
+                    <span class="btn-text">Create Account</span>
+                    <div class="btn-loader"></div>
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <p>Already have an account? <a href="index.html">Sign in</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const registerForm = document.getElementById('registerForm');
+            const errorMessage = document.getElementById('errorMessage');
+            const registerBtn = document.getElementById('registerBtn');
+
+            registerForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value.trim();
+                const confirmPassword = document.getElementById('confirmPassword').value.trim();
+
+                // Show loading state
+                showButtonLoading(registerBtn);
+                hideError(errorMessage);
+
+                setTimeout(() => {
+                    try {
+                        // Validation
+                        if (!username || !email || !password || !confirmPassword) {
+                            throw new Error('Please fill in all fields');
+                        }
+
+                        if (!email.includes('@')) {
+                            throw new Error('Please enter a valid email address');
+                        }
+
+                        if (password.length < 6) {
+                            throw new Error('Password must be at least 6 characters long');
+                        }
+
+                        if (password !== confirmPassword) {
+                            throw new Error('Passwords do not match');
+                        }
+
+                        const user = registerUser(username, email, password);
+                        localStorage.setItem('currentUser', JSON.stringify(user));
+                        window.location.href = 'dashboard.html';
+                    } catch (error) {
+                        showError(errorMessage, error.message);
+                        hideButtonLoading(registerBtn);
+                    }
+                }, 1000);
+            });
+        });
+    </script>
+</body>
+</html>

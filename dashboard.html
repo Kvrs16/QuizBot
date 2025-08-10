@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Platform - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">Q</div>
+                    <h1>Quiz Platform</h1>
+                </div>
+                <div class="user-menu">
+                    <span class="welcome-text">Welcome, <span id="userName"></span>!</span>
+                    <button class="btn btn-outline" id="logoutBtn">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="dashboard-main">
+            <div class="dashboard-hero">
+                <h2>Your Quiz Dashboard</h2>
+                <p>Create, manage, and track your quizzes</p>
+                <button class="btn btn-primary btn-large" id="createQuizBtn">
+                    ➕ Create New Quiz
+                </button>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📝</div>
+                    <div class="stat-content">
+                        <h3 id="totalQuizzes">0</h3>
+                        <p>Total Quizzes</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-content">
+                        <h3 id="totalParticipants">0</h3>
+                        <p>Total Participants</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-content">
+                        <h3 id="averageScore">0%</h3>
+                        <p>Average Score</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quiz-section">
+                <h3>Your Quizzes</h3>
+                <div class="quiz-grid" id="quizGrid">
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-icon">📋</div>
+                        <h4>No quizzes yet</h4>
+                        <p>Create your first quiz to get started!</p>
+                        <button class="btn btn-primary" onclick="window.location.href='create-quiz.html'">
+                            Create Quiz
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check authentication
+            const currentUser = checkAuth();
+            if (!currentUser) return;
+
+            // Set user name
+            document.getElementById('userName').textContent = currentUser.username;
+
+            // Load dashboard data
+            loadDashboard(currentUser.id);
+
+            // Event listeners
+            document.getElementById('createQuizBtn').addEventListener('click', function() {
+                window.location.href = 'create-quiz.html';
+            });
+
+            document.getElementById('logoutBtn').addEventListener('click', function() {
+                localStorage.removeItem('currentUser');
+                window.location.href = 'index.html';
+            });
+        });
+
+        function loadDashboard(userId) {
+            const quizzes = getUserQuizzes(userId);
+            const quizGrid = document.getElementById('quizGrid');
+            const emptyState = document.getElementById('emptyState');
+
+            // Update stats
+            updateDashboardStats(quizzes);
+
+            if (quizzes.length === 0) {
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            
+            // Render quizzes
+            quizGrid.innerHTML = '';
+            quizzes.forEach(quiz => {
+                const quizCard = createQuizCard(quiz);
+                quizGrid.appendChild(quizCard);
+            });
+        }
+
+        function createQuizCard(quiz) {
+            const results = getQuizResults(quiz.id);
+            const participantCount = results.length;
+            const averageScore = participantCount > 0 
+                ? Math.round(results.reduce((sum, result) => sum + result.score, 0) / participantCount)
+                : 0;
+
+            const card = document.createElement('div');
+            card.className = 'quiz-card';
+            card.innerHTML = `
+                <div class="quiz-card-header">
+                    <h4>${escapeHtml(quiz.title)}</h4>
+                    <div class="quiz-card-actions">
+                        <button class="btn-icon" onclick="shareQuiz('${quiz.id}')" title="Share Quiz">
+                            🔗
+                        </button>
+                        <button class="btn-icon" onclick="deleteQuiz('${quiz.id}')" title="Delete Quiz">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+                <p class="quiz-description">${escapeHtml(quiz.description)}</p>
+                <div class="quiz-stats">
+                    <div class="quiz-stat">
+                        <span class="stat-label">Questions:</span>
+                        <span class="stat-value">${quiz.questions.length}</span>
+                    </div>
+                    <div class="quiz-stat">
+                        <span class="stat-label">Participants:</span>
+                        <span class="stat-value">${participantCount}</span>
+                    </div>
+                    ${participantCount > 0 ? `
+                    <div class="quiz-stat">
+                        <span class="stat-label">Avg Score:</span>
+                        <span class="stat-value ${getScoreClass(averageScore)}">${averageScore}%</span>
+                    </div>
+                    ` : ''}
+                </div>
+                <div class="quiz-card-footer">
+                    <small class="quiz-date">Created ${formatDate(quiz.createdAt)}</small>
+                    <button class="btn btn-outline btn-small" onclick="viewResults('${quiz.id}')">
+                        View Results
+                    </button>
+                </div>
+            `;
+            return card;
+        }
+
+        function updateDashboardStats(quizzes) {
+            const totalQuizzes = quizzes.length;
+            let totalParticipants = 0;
+            let totalScores = 0;
+            let scoreCount = 0;
+
+            quizzes.forEach(quiz => {
+                const results = getQuizResults(quiz.id);
+                totalParticipants += results.length;
+                results.forEach(result => {
+                    totalScores += result.score;
+                    scoreCount++;
+                });
+            });
+
+            const averageScore = scoreCount > 0 ? Math.round(totalScores / scoreCount) : 0;
+
+            document.getElementById('totalQuizzes').textContent = totalQuizzes;
+            document.getElementById('totalParticipants').textContent = totalParticipants;
+            document.getElementById('averageScore').textContent = averageScore + '%';
+        }
+
+        function shareQuiz(quizId) {
+            const baseUrl = window.location.origin + window.location.pathname.replace('dashboard.html', '');
+            const shareUrl = `${baseUrl}take-quiz.html?quiz=${quizId}`;
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    showToast('Quiz link copied to clipboard!', 'success');
+                }).catch(() => {
+                    showShareDialog(shareUrl);
+                });
+            } else {
+                showShareDialog(shareUrl);
+            }
+        }
+
+        function showShareDialog(url) {
+            const dialog = document.createElement('div');
+            dialog.className = 'share-dialog';
+            dialog.innerHTML = `
+                <div class="share-dialog-content">
+                    <h4>Share Quiz</h4>
+                    <p>Copy this link to share your quiz:</p>
+                    <input type="text" value="${url}" readonly onclick="this.select()">
+                    <div class="share-dialog-actions">
+                        <button class="btn btn-primary" onclick="this.parentElement.parentElement.parentElement.remove()">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(dialog);
+        }
+
+        function deleteQuiz(quizId) {
+            if (confirm('Are you sure you want to delete this quiz? This action cannot be undone.')) {
+                removeQuiz(quizId);
+                const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+                loadDashboard(currentUser.id);
+                showToast('Quiz deleted successfully', 'success');
+            }
+        }
+
+        function viewResults(quizId) {
+            window.location.href = `view-results.html?quiz=${quizId}`;
+        }
+    </script>
+</body>
+</html>
