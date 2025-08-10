@@ -1,4 +1,4 @@
-# Collaborative Quiz Platform
+# Collaborative Quiz Platform:[DEMO](https://kvrs16.github.io/QuizBot/)
 
 A modern, responsive web application that allows users to create, share, and take interactive quizzes with real-time score tracking and comprehensive analytics.
 
@@ -253,5 +253,6 @@ For support, questions, or feature requests:
 ---
 
 **Built with ❤️ using HTML, CSS, and JavaScript**
+
 
 *A modern web application demonstrating best practices in frontend development, user experience design, and responsive web development.*
